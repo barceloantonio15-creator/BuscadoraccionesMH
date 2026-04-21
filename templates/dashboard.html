@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GROW Scanner — Strategy Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── Reset & Variables ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #080c14;
+  --surface:  #0d1421;
+  --card:     #111928;
+  --card2:    #161f30;
+  --border:   #1c2b42;
+  --border2:  #243347;
+
+  --primary:  #00e5b4;
+  --primary2: #00b890;
+  --amber:    #f59e0b;
+  --red:      #f43f5e;
+  --blue:     #38bdf8;
+  --purple:   #a78bfa;
+
+  --text:     #e2eaf7;
+  --muted:    #5a7190;
+  --muted2:   #3a4f68;
+
+  --breakout: #00e5b4;
+  --pullback: #f59e0b;
+  --neutral:  #5a7190;
+
+  --font-ui:   'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius:  8px;
+  --radius2: 14px;
+  --shadow:  0 4px 24px rgba(0,0,0,.5);
+  --glow:    0 0 20px rgba(0,229,180,.15);
+}
+
+html { font-size: 14px; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* grid noise texture */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(var(--border2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border2) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.18;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Layout ────────────────────────────────────────────────────────────── */
+.app-shell { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+header {
+  display: flex; align-items: center; gap: 20px;
+  padding: 0 28px;
+  height: 60px;
+  background: rgba(8,12,20,.92);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  position: sticky; top: 0; z-index: 100;
+}
+
+.logo {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none;
+}
+.logo-mark {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--primary), var(--blue));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-weight: 700; font-size: 13px;
+  color: #080c14; letter-spacing: -1px;
+}
+.logo-text {
+  font-size: 15px; font-weight: 700;
+  letter-spacing: 0.5px;
+  background: linear-gradient(90deg, var(--primary), var(--blue));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.logo-sub { font-size: 11px; color: var(--muted); font-weight: 400; letter-spacing: 1px; }
+
+.header-spacer { flex: 1; }
+
+.status-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 11px; color: var(--muted);
+  font-family: var(--font-mono);
+}
+.status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--muted2);
+  transition: background .3s;
+}
+.status-dot.active { background: var(--primary); box-shadow: 0 0 8px var(--primary); animation: pulse-dot 1s infinite; }
+.status-dot.done { background: var(--primary); }
+@keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.header-time { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+/* ── Scan Bar ──────────────────────────────────────────────────────────── */
+.scan-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.scan-controls { display: flex; align-items: center; gap: 12px; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 18px;
+  border: none; border-radius: var(--radius);
+  font-family: var(--font-ui); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s;
+  letter-spacing: .3px;
+}
+.btn-primary {
+  background: var(--primary); color: #080c14;
+}
+.btn-primary:hover { background: var(--primary2); transform: translateY(-1px); box-shadow: var(--glow); }
+.btn-danger {
+  background: transparent; color: var(--red);
+  border: 1px solid var(--red);
+}
+.btn-danger:hover { background: rgba(244,63,94,.12); }
+.btn:disabled { opacity: .45; cursor: not-allowed; transform: none !important; }
+
+.stocks-input {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--muted);
+}
+.stocks-input input {
+  width: 72px;
+  padding: 7px 10px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font-mono); font-size: 12px;
+  outline: none; transition: border .2s;
+}
+.stocks-input input:focus { border-color: var(--primary); }
+
+.progress-wrap { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.progress-label {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; color: var(--muted); font-family: var(--font-mono);
+}
+.progress-bar-track {
+  height: 4px; background: var(--border);
+  border-radius: 2px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--blue));
+  border-radius: 2px;
+  width: 0%;
+  transition: width .3s;
+}
+
+.scan-stats { display: flex; gap: 16px; }
+.scan-stat {
+  text-align: center;
+  font-family: var(--font-mono);
+}
+.scan-stat-value { font-size: 18px; font-weight: 700; color: var(--primary); line-height: 1; }
+.scan-stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: .5px; }
+
+/* ── Filters ───────────────────────────────────────────────────────────── */
+.filters-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 28px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.filter-label { font-size: 11px; color: var(--muted); letter-spacing: .5px; }
+
+.signal-tabs { display: flex; gap: 4px; }
+.signal-tab {
+  padding: 5px 14px;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 11px; font-weight: 600; letter-spacing: .5px;
+  cursor: pointer; transition: all .2s; color: var(--muted);
+}
+.signal-tab.active {
+  border-color: var(--primary); color: var(--primary);
+  background: rgba(0,229,180,.08);
+}
+.signal-tab[data-signal="BREAKOUT"].active { border-color: var(--breakout); color: var(--breakout); background: rgba(0,229,180,.08); }
+.signal-tab[data-signal="PULLBACK"].active { border-color: var(--amber); color: var(--amber); background: rgba(245,158,11,.08); }
+
+.score-filter { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.score-filter label { font-size: 11px; color: var(--muted); }
+.score-filter input[type=range] {
+  width: 100px; accent-color: var(--primary);
+}
+#scoreVal { font-family: var(--font-mono); font-size: 12px; color: var(--primary); }
+
+/* ── Main Grid ─────────────────────────────────────────────────────────── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  grid-template-rows: auto 1fr;
+  gap: 0;
+  flex: 1;
+}
+
+/* ── KPI Cards ─────────────────────────────────────────────────────────── */
+.kpi-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+.kpi {
+  padding: 16px 24px;
+  border-right: 1px solid var(--border);
+  transition: background .2s;
+}
+.kpi:last-child { border-right: none; }
+.kpi:hover { background: rgba(255,255,255,.02); }
+.kpi-label { font-size: 10px; color: var(--muted); letter-spacing: .8px; text-transform: uppercase; margin-bottom: 6px; }
+.kpi-value {
+  font-size: 26px; font-weight: 700; line-height: 1;
+  font-family: var(--font-mono);
+}
+.kpi-value.green { color: var(--primary); }
+.kpi-value.amber { color: var(--amber); }
+.kpi-value.blue  { color: var(--blue); }
+.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: var(--font-mono); }
+
+/* ── Table Panel ───────────────────────────────────────────────────────── */
+.table-panel {
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+
+.panel-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.panel-title { font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+.count-badge {
+  padding: 2px 8px;
+  background: rgba(0,229,180,.12);
+  border: 1px solid rgba(0,229,180,.25);
+  border-radius: 10px;
+  font-size: 11px; color: var(--primary); font-family: var(--font-mono);
+}
+
+.table-scroll { overflow-y: auto; flex: 1; }
+
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px;
+}
+thead th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 10px; font-weight: 700; letter-spacing: .8px;
+  color: var(--muted); text-transform: uppercase;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 2;
+  cursor: pointer; user-select: none;
+  white-space: nowrap;
+}
+thead th:hover { color: var(--text); }
+thead th::after { content: ' ↕'; opacity: .3; }
+thead th.sort-asc::after { content: ' ↑'; opacity: 1; color: var(--primary); }
+thead th.sort-desc::after { content: ' ↓'; opacity: 1; color: var(--primary); }
+
+tbody tr {
+  border-bottom: 1px solid rgba(28,43,66,.6);
+  cursor: pointer; transition: background .15s;
+}
+tbody tr:hover { background: rgba(0,229,180,.04); }
+tbody tr.selected { background: rgba(0,229,180,.08); border-left: 3px solid var(--primary); }
+
+td { padding: 10px 16px; vertical-align: middle; }
+
+.td-ticker {
+  font-family: var(--font-mono); font-weight: 700; font-size: 13px;
+  color: var(--text);
+}
+.td-name { color: var(--muted); font-size: 11px; }
+
+.score-bar-wrap { display: flex; align-items: center; gap: 8px; }
+.score-bar {
+  flex: 1; height: 3px; background: var(--border);
+  border-radius: 2px; min-width: 50px;
+}
+.score-bar-inner {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--primary), var(--blue));
+}
+
+.signal-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+}
+.signal-badge.BREAKOUT { background: rgba(0,229,180,.15); color: var(--breakout); border: 1px solid rgba(0,229,180,.3); }
+.signal-badge.PULLBACK { background: rgba(245,158,11,.12); color: var(--amber); border: 1px solid rgba(245,158,11,.3); }
+.signal-badge.NEUTRAL  { background: rgba(90,113,144,.12); color: var(--neutral); border: 1px solid rgba(90,113,144,.3); }
+
+.mono { font-family: var(--font-mono); }
+.pos  { color: var(--primary); }
+.neg  { color: var(--red); }
+.dim  { color: var(--muted); }
+
+/* ── Side Panel ────────────────────────────────────────────────────────── */
+.side-panel {
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  overflow-y: auto;
+}
+
+.side-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 12px; color: var(--muted2); text-align: center; padding: 32px;
+}
+.side-empty-icon { font-size: 40px; opacity: .3; }
+.side-empty p { font-size: 13px; line-height: 1.6; }
+
+.detail-header {
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(0,229,180,.06), transparent);
+  border-bottom: 1px solid var(--border);
+}
+.detail-ticker { font-family: var(--font-mono); font-size: 28px; font-weight: 700; color: var(--primary); line-height: 1; }
+.detail-name { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.detail-price { font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--text); margin-top: 12px; }
+.detail-sector {
+  display: inline-block; margin-top: 8px;
+  padding: 3px 10px; border-radius: 12px;
+  background: rgba(56,189,248,.1); color: var(--blue);
+  font-size: 10px; font-weight: 600; letter-spacing: .5px;
+}
+
+.detail-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-section-title {
+  font-size: 10px; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.score-breakdown {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.score-row { display: flex; align-items: center; gap: 8px; }
+.score-row-label { font-size: 11px; color: var(--muted); width: 90px; flex-shrink: 0; }
+.score-row-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; }
+.score-row-fill { height: 100%; border-radius: 2px; }
+.score-row-val { font-family: var(--font-mono); font-size: 11px; color: var(--text); width: 28px; text-align: right; }
+
+.kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kv { }
+.kv-label { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+.kv-value { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text); }
+
+.trade-box {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px;
+}
+.trade-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; }
+.trade-row:not(:last-child) { border-bottom: 1px solid rgba(28,43,66,.8); }
+.trade-label { font-size: 11px; color: var(--muted); }
+.trade-value { font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
+.trade-value.entry { color: var(--blue); }
+.trade-value.stop  { color: var(--red); }
+.trade-value.target { color: var(--primary); }
+.trade-value.rr    { color: var(--amber); }
+
+.details-list { display: flex; flex-direction: column; gap: 6px; }
+.detail-item {
+  padding: 8px 10px;
+  background: var(--card); border-radius: var(--radius);
+  font-size: 11px; color: var(--muted);
+  border-left: 2px solid var(--border2);
+  line-height: 1.5;
+}
+
+/* ── Charts Panel ──────────────────────────────────────────────────────── */
+.charts-section {
+  grid-column: 1 / -1;
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  border-top: 1px solid var(--border);
+}
+.chart-card {
+  padding: 16px 20px;
+  border-right: 1px solid var(--border);
+}
+.chart-card:last-child { border-right: none; }
+.chart-title { font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+.chart-wrap { position: relative; height: 160px; }
+
+/* ── Toast ─────────────────────────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 999;
+  padding: 12px 20px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  font-size: 13px; transform: translateY(120%); opacity: 0;
+  transition: all .3s; display: flex; align-items: center; gap: 8px;
+  max-width: 320px;
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.toast-ok { border-color: var(--primary); }
+#toast.toast-err { border-color: var(--red); }
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ── Empty State ───────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 60px 20px; gap: 12px; color: var(--muted2); text-align: center;
+}
+.empty-state h3 { font-size: 16px; color: var(--muted); }
+.empty-state p  { font-size: 13px; line-height: 1.6; max-width: 320px; }
+
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- ── Header ─────────────────────────────────────────────────────────── -->
+<header>
+  <a class="logo" href="#">
+    <div class="logo-mark">GW</div>
+    <div>
+      <div class="logo-text">GROW SCANNER</div>
+      <div class="logo-sub">CANSLIM · Near-ATH Momentum</div>
+    </div>
+  </a>
+
+  <div class="header-spacer"></div>
+
+  <button id="btnTelegram" onclick="testTelegram()"
+    style="background:transparent;border:1px solid #1c2b42;color:#5a7190;font-size:11px;
+           padding:5px 12px;border-radius:20px;cursor:pointer;font-family:var(--font-ui);
+           letter-spacing:.3px;transition:all .2s"
+    onmouseover="this.style.borderColor='#00e5b4';this.style.color='#00e5b4'"
+    onmouseout="this.style.borderColor='#1c2b42';this.style.color='#5a7190'">
+    🤖 Test Telegram
+  </button>
+
+  <div class="status-pill">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Esperando scan</span>
+  </div>
+  <div class="header-time" id="clockEl"></div>
+</header>
+
+<!-- ── Scan Bar ───────────────────────────────────────────────────────── -->
+<div class="scan-bar">
+  <div class="scan-controls">
+    <button class="btn btn-primary" id="btnStart" onclick="startScan()">
+      ▶ Iniciar Scan
+    </button>
+    <button class="btn btn-danger" id="btnStop" onclick="stopScan()" style="display:none">
+      ■ Detener
+    </button>
+    <div class="stocks-input">
+      <label>Acciones:</label>
+      <input type="number" id="maxStocks" value="50" min="10" max="200">
+    </div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-label">
+      <span id="progressTicker">—</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progressBar"></div>
+    </div>
+  </div>
+
+  <div class="scan-stats">
+    <div class="scan-stat">
+      <div class="scan-stat-value" id="statScanned">—</div>
+      <div class="scan-stat-label">Escaneadas</div>
+    </div>
+    <div class="scan-stat">
+      <div class="scan-stat-value" id="statQualified">—</div>
+      <div class="scan-stat-label">Calificadas</div>
+    </div>
+    <div class="scan-stat">
+      <div class="scan-stat-value" id="statBreakout">—</div>
+      <div class="scan-stat-label">Breakouts</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Filters ────────────────────────────────────────────────────────── -->
+<div class="filters-bar">
+  <span class="filter-label">SEÑAL:</span>
+  <div class="signal-tabs" id="signalTabs">
+    <div class="signal-tab active" data-signal="ALL" onclick="setSignalFilter('ALL')">Todas</div>
+    <div class="signal-tab" data-signal="BREAKOUT" onclick="setSignalFilter('BREAKOUT')">Breakout</div>
+    <div class="signal-tab" data-signal="PULLBACK" onclick="setSignalFilter('PULLBACK')">Pullback</div>
+    <div class="signal-tab" data-signal="NEUTRAL" onclick="setSignalFilter('NEUTRAL')">Neutral</div>
+  </div>
+
+  <div class="score-filter">
+    <label>Score mín:</label>
+    <input type="range" id="scoreRange" min="0" max="100" value="0" oninput="setScoreFilter(this.value)">
+    <span id="scoreVal">0</span>
+  </div>
+</div>
+
+<!-- ── Main Grid ──────────────────────────────────────────────────────── -->
+<div class="main-grid" style="display:grid; grid-template-columns:1fr 300px;">
+
+  <!-- KPI Row -->
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-label">Total resultados</div>
+      <div class="kpi-value green" id="kpiTotal">—</div>
+      <div class="kpi-sub">acciones calificadas</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Breakouts activos</div>
+      <div class="kpi-value green" id="kpiBreakout">—</div>
+      <div class="kpi-sub">señal de entrada</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Pullbacks</div>
+      <div class="kpi-value amber" id="kpiPullback">—</div>
+      <div class="kpi-sub">reentrada en tendencia</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Score promedio</div>
+      <div class="kpi-value blue" id="kpiAvgScore">—</div>
+      <div class="kpi-sub">de 100 puntos</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Top score</div>
+      <div class="kpi-value" id="kpiTopScore" style="color:var(--purple)">—</div>
+      <div class="kpi-sub" id="kpiTopTicker">—</div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-panel" style="grid-column:1; grid-row:2; max-height:480px;">
+    <div class="panel-head">
+      <span class="panel-title">Resultados del Scan</span>
+      <span class="count-badge" id="tableCount">0</span>
+    </div>
+    <div class="table-scroll" id="tableScroll">
+      <div class="empty-state" id="emptyState">
+        <div style="font-size:48px;opacity:.2">📊</div>
+        <h3>Sin datos</h3>
+        <p>Ejecuta un scan para ver las acciones que califican con la estrategia GROW.</p>
+      </div>
+      <table id="resultsTable" style="display:none">
+        <thead>
+          <tr>
+            <th onclick="sortTable('ticker')">#</th>
+            <th onclick="sortTable('ticker')">Ticker</th>
+            <th onclick="sortTable('score')">Score</th>
+            <th onclick="sortTable('signal')">Señal</th>
+            <th onclick="sortTable('price')">Precio</th>
+            <th onclick="sortTable('distance_ath')">ATH%</th>
+            <th onclick="sortTable('rsi')">RSI</th>
+            <th onclick="sortTable('returns_1m')">1M%</th>
+            <th onclick="sortTable('returns_3m')">3M%</th>
+            <th onclick="sortTable('volume_ratio')">Vol×</th>
+            <th onclick="sortTable('sector')">Sector</th>
+            <th onclick="sortTable('market_cap')">Cap $B</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Side Detail -->
+  <div class="side-panel" style="grid-column:2; grid-row:2; max-height:480px;">
+    <div id="sideEmpty" class="side-empty">
+      <div class="side-empty-icon">⬅</div>
+      <p>Selecciona una acción para ver el análisis detallado</p>
+    </div>
+    <div id="sideDetail" style="display:none"></div>
+  </div>
+
+</div>
+
+<!-- ── Charts ─────────────────────────────────────────────────────────── -->
+<div class="charts-section" style="display:grid; grid-template-columns:1fr 1fr 1fr;">
+  <div class="chart-card">
+    <div class="chart-title">Distribución de Señales</div>
+    <div class="chart-wrap"><canvas id="chartSignals"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Top Sectores</div>
+    <div class="chart-wrap"><canvas id="chartSectors"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Distribución de Score</div>
+    <div class="chart-wrap"><canvas id="chartScores"></canvas></div>
+  </div>
+</div>
+
+</div><!-- /app-shell -->
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let allData = [];
+let filteredData = [];
+let signalFilter = 'ALL';
+let minScore = 0;
+let sortKey = 'score';
+let sortDir = -1; // -1 = desc
+let selectedTicker = null;
+let chartSignals, chartSectors, chartScores;
+let evtSource = null;
+let scanning = false;
+let qualifiedCount = 0;
+let scannedCount = 0;
+
+// ── Clock ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clockEl').textContent =
+    now.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── SSE ────────────────────────────────────────────────────────────────────
+function connectSSE() {
+  if (evtSource) evtSource.close();
+  evtSource = new EventSource('/api/events');
+  evtSource.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (d.type === 'progress') handleProgress(d);
+    if (d.type === 'complete') handleComplete(d);
+    if (d.type === 'error') {
+      showToast('Error en scan: ' + d.message, 'err');
+      setScanningState(false);
+    }
+  };
+}
+connectSSE();
+
+function handleProgress(d) {
+  scannedCount = d.current;
+  if (d.qualified) qualifiedCount++;
+
+  const pct = Math.round((d.current / d.total) * 100);
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = pct + '%';
+  document.getElementById('progressTicker').textContent =
+    `Analizando: ${d.ticker} (${d.current}/${d.total})`;
+  document.getElementById('statScanned').textContent = d.current;
+  document.getElementById('statQualified').textContent = qualifiedCount;
+
+  // live load results every 10 tickers
+  if (d.current % 10 === 0) loadResults();
+}
+
+async function handleComplete(d) {
+  setScanningState(false);
+  showToast(`✓ Scan completado — ${d.total_qualified} acciones calificadas`, 'ok');
+  await loadResults();
+  await loadStats();
+}
+
+// ── Scan Control ───────────────────────────────────────────────────────────
+async function startScan() {
+  const max = parseInt(document.getElementById('maxStocks').value) || 50;
+  qualifiedCount = 0; scannedCount = 0;
+  document.getElementById('statBreakout').textContent = '—';
+
+  try {
+    const res = await fetch('/api/scan/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({max_stocks: max})
+    });
+    if (res.status === 409) { showToast('Ya hay un scan en curso', 'err'); return; }
+    const data = await res.json();
+    showToast(data.message, 'ok');
+    setScanningState(true);
+  } catch(err) {
+    showToast('Error al iniciar el scan', 'err');
+  }
+}
+
+async function stopScan() {
+  await fetch('/api/scan/stop', {method:'POST'});
+  setScanningState(false);
+  showToast('Scan detenido', 'ok');
+  await loadResults();
+}
+
+function setScanningState(active) {
+  scanning = active;
+  document.getElementById('btnStart').disabled = active;
+  document.getElementById('btnStop').style.display = active ? '' : 'none';
+  document.getElementById('statusDot').className = 'status-dot' + (active ? ' active' : '');
+  document.getElementById('statusText').textContent = active ? 'Escaneando…' : 'Inactivo';
+  if (!active) {
+    document.getElementById('progressBar').style.width = '100%';
+    document.getElementById('progressTicker').textContent = 'Scan completado';
+    document.getElementById('statusDot').className = 'status-dot done';
+  }
+}
+
+// ── Data Loading ───────────────────────────────────────────────────────────
+async function loadResults() {
+  try {
+    const qs = new URLSearchParams({
+      signal: signalFilter, min_score: minScore, limit: 200
+    });
+    const res = await fetch('/api/results?' + qs);
+    const data = await res.json();
+    allData = data.results || [];
+    renderTable();
+  } catch(err) {
+    console.error('Error loading results', err);
+  }
+}
+
+async function loadStats() {
+  try {
+    const res = await fetch('/api/stats');
+    const d = await res.json();
+    if (d.no_data) return;
+
+    document.getElementById('kpiTotal').textContent = d.total;
+    document.getElementById('kpiBreakout').textContent = d.signals?.BREAKOUT || 0;
+    document.getElementById('kpiPullback').textContent = d.signals?.PULLBACK || 0;
+    document.getElementById('kpiAvgScore').textContent = d.avg_score;
+    document.getElementById('statBreakout').textContent = d.signals?.BREAKOUT || 0;
+
+    updateCharts(d);
+  } catch(err) {
+    console.error('Error loading stats', err);
+  }
+}
+
+// ── Filters ────────────────────────────────────────────────────────────────
+function setSignalFilter(sig) {
+  signalFilter = sig;
+  document.querySelectorAll('.signal-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.signal === sig);
+  });
+  renderTable();
+}
+
+function setScoreFilter(val) {
+  minScore = parseInt(val);
+  document.getElementById('scoreVal').textContent = val;
+  renderTable();
+}
+
+// ── Table Render ───────────────────────────────────────────────────────────
+function applyFilters(data) {
+  return data.filter(r => {
+    if (signalFilter !== 'ALL' && r.signal !== signalFilter) return false;
+    if (r.score < minScore) return false;
+    return true;
+  });
+}
+
+function sortData(data) {
+  return [...data].sort((a, b) => {
+    let va = a[sortKey], vb = b[sortKey];
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    if (va === null || va === undefined) return 1;
+    if (vb === null || vb === undefined) return -1;
+    return va < vb ? sortDir : va > vb ? -sortDir : 0;
+  });
+}
+
+function renderTable() {
+  filteredData = sortData(applyFilters(allData));
+  const body = document.getElementById('tableBody');
+  const empty = document.getElementById('emptyState');
+  const table = document.getElementById('resultsTable');
+  const count = document.getElementById('tableCount');
+  count.textContent = filteredData.length;
+
+  if (filteredData.length === 0) {
+    empty.style.display = '';
+    table.style.display = 'none';
+    updateKPI([]);
+    return;
+  }
+
+  empty.style.display = 'none';
+  table.style.display = '';
+
+  body.innerHTML = filteredData.map((r, i) => {
+    const scoreBarW = Math.round(r.score);
+    const sig = r.signal || 'NEUTRAL';
+    const ret1m = r.returns_1m || 0;
+    const ret3m = r.returns_3m || 0;
+    const selected = r.ticker === selectedTicker ? ' selected' : '';
+    return `<tr onclick="selectRow('${r.ticker}')" class="${selected}">
+      <td class="mono dim">${i+1}</td>
+      <td>
+        <div class="td-ticker">${r.ticker}</div>
+        <div class="td-name">${(r.name||'').slice(0,20)}</div>
+      </td>
+      <td>
+        <div class="score-bar-wrap">
+          <span class="mono" style="color:var(--primary);min-width:24px">${r.score}</span>
+          <div class="score-bar"><div class="score-bar-inner" style="width:${scoreBarW}%"></div></div>
+        </div>
+      </td>
+      <td><span class="signal-badge ${sig}">${sig}</span></td>
+      <td class="mono">$${(r.price||0).toFixed(2)}</td>
+      <td class="mono ${r.distance_ath >= -5 ? 'pos' : 'dim'}">${(r.distance_ath||0).toFixed(1)}%</td>
+      <td class="mono">${(r.rsi||0).toFixed(0)}</td>
+      <td class="mono ${ret1m >= 0 ? 'pos' : 'neg'}">${ret1m.toFixed(1)}%</td>
+      <td class="mono ${ret3m >= 0 ? 'pos' : 'neg'}">${ret3m.toFixed(1)}%</td>
+      <td class="mono">${(r.volume_ratio||0).toFixed(1)}×</td>
+      <td class="dim" style="font-size:11px">${(r.sector||'?').slice(0,18)}</td>
+      <td class="mono dim">${(r.market_cap||0).toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+
+  updateKPI(filteredData);
+}
+
+function updateKPI(data) {
+  const total = data.length;
+  const breakouts = data.filter(r => r.signal === 'BREAKOUT').length;
+  const pullbacks = data.filter(r => r.signal === 'PULLBACK').length;
+  const scores = data.map(r => r.score);
+  const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
+  const top = scores.length ? Math.max(...scores) : null;
+  const topRow = top ? data.find(r => r.score === top) : null;
+
+  document.getElementById('kpiTotal').textContent = total || '—';
+  document.getElementById('kpiBreakout').textContent = breakouts || '—';
+  document.getElementById('kpiPullback').textContent = pullbacks || '—';
+  document.getElementById('kpiAvgScore').textContent = avg;
+  document.getElementById('kpiTopScore').textContent = top || '—';
+  document.getElementById('kpiTopTicker').textContent = topRow ? topRow.ticker : '—';
+}
+
+// ── Sort ───────────────────────────────────────────────────────────────────
+function sortTable(key) {
+  if (sortKey === key) sortDir = -sortDir;
+  else { sortKey = key; sortDir = -1; }
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+  });
+  renderTable();
+}
+
+// ── Row Select / Detail ────────────────────────────────────────────────────
+function selectRow(ticker) {
+  selectedTicker = ticker;
+  const r = allData.find(x => x.ticker === ticker);
+  if (!r) return;
+  renderTable(); // re-render for selected class
+
+  const detail = document.getElementById('sideDetail');
+  document.getElementById('sideEmpty').style.display = 'none';
+  detail.style.display = '';
+
+  const details = r.details || {};
+  const scores = r.scores || {};
+
+  const scoreItems = [
+    {label: 'Cerca ATH', key: 'near_ath', max: 30, color: '#00e5b4'},
+    {label: 'Tendencia', key: 'trend', max: 20, color: '#38bdf8'},
+    {label: 'Momentum', key: 'momentum', max: 20, color: '#a78bfa'},
+    {label: 'Volumen', key: 'volume', max: 15, color: '#f59e0b'},
+    {label: 'RSI', key: 'rsi', max: 10, color: '#f43f5e'},
+    {label: 'Setup', key: 'setup', max: 5, color: '#6b7280'},
+    {label: 'Fundament.', key: 'fundamentals', max: 10, color: '#34d399'},
+  ];
+
+  const tradeSec = r.signal !== 'NEUTRAL' && r.entry_price ? `
+    <div class="detail-section">
+      <div class="detail-section-title">📍 Trade Setup</div>
+      <div class="trade-box">
+        <div class="trade-row">
+          <span class="trade-label">Entrada</span>
+          <span class="trade-value entry">$${r.entry_price?.toFixed(2)}</span>
+        </div>
+        <div class="trade-row">
+          <span class="trade-label">Stop Loss</span>
+          <span class="trade-value stop">$${r.stop_loss?.toFixed(2)}</span>
+        </div>
+        <div class="trade-row">
+          <span class="trade-label">Target</span>
+          <span class="trade-value target">$${r.target?.toFixed(2)}</span>
+        </div>
+        <div class="trade-row">
+          <span class="trade-label">Riesgo/Beneficio</span>
+          <span class="trade-value rr">${r.r_r_ratio}:1</span>
+        </div>
+      </div>
+    </div>
+  ` : '';
+
+  detail.innerHTML = `
+    <div class="detail-header">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="detail-ticker">${r.ticker}</div>
+          <div class="detail-name">${r.name || ''}</div>
+        </div>
+        <span class="signal-badge ${r.signal}" style="font-size:11px">${r.signal}</span>
+      </div>
+      <div class="detail-price">$${(r.price||0).toFixed(2)}</div>
+      <div class="detail-sector">${r.sector || 'Unknown'}</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Score: ${r.score}/100</div>
+      <div class="score-breakdown">
+        ${scoreItems.map(s => {
+          const val = scores[s.key] || 0;
+          const pct = (val / s.max) * 100;
+          return `<div class="score-row">
+            <span class="score-row-label">${s.label}</span>
+            <div class="score-row-bar">
+              <div class="score-row-fill" style="width:${pct}%;background:${s.color}"></div>
+            </div>
+            <span class="score-row-val">${val}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Métricas</div>
+      <div class="kv-grid">
+        <div class="kv"><div class="kv-label">ATH%</div><div class="kv-value ${r.distance_ath >= -5 ? 'pos' : ''}">${(r.distance_ath||0).toFixed(1)}%</div></div>
+        <div class="kv"><div class="kv-label">RSI</div><div class="kv-value">${(r.rsi||0).toFixed(1)}</div></div>
+        <div class="kv"><div class="kv-label">1M%</div><div class="kv-value ${(r.returns_1m||0) >= 0 ? 'pos' : 'neg'}">${(r.returns_1m||0).toFixed(1)}%</div></div>
+        <div class="kv"><div class="kv-label">3M%</div><div class="kv-value ${(r.returns_3m||0) >= 0 ? 'pos' : 'neg'}">${(r.returns_3m||0).toFixed(1)}%</div></div>
+        <div class="kv"><div class="kv-label">6M%</div><div class="kv-value ${(r.returns_6m||0) >= 0 ? 'pos' : 'neg'}">${(r.returns_6m||0).toFixed(1)}%</div></div>
+        <div class="kv"><div class="kv-label">Vol×</div><div class="kv-value">${(r.volume_ratio||0).toFixed(2)}×</div></div>
+        <div class="kv"><div class="kv-label">Mkt Cap</div><div class="kv-value">$${(r.market_cap||0).toFixed(1)}B</div></div>
+        <div class="kv"><div class="kv-label">P/E</div><div class="kv-value">${r.pe_ratio ? r.pe_ratio.toFixed(1) : '—'}</div></div>
+        <div class="kv"><div class="kv-label">ATR%</div><div class="kv-value">${(r.atr_percent||0).toFixed(1)}%</div></div>
+        <div class="kv"><div class="kv-label">Vol 20D</div><div class="kv-value">${(r.volatility||0).toFixed(0)}%</div></div>
+      </div>
+    </div>
+
+    ${tradeSec}
+
+    <div class="detail-section">
+      <div class="detail-section-title">Análisis</div>
+      <div class="details-list">
+        ${Object.entries(details).map(([k,v]) =>
+          `<div class="detail-item"><b>${k}:</b> ${v}</div>`
+        ).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ── Charts ─────────────────────────────────────────────────────────────────
+const CHART_DEFAULTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false }, tooltip: { bodyFont: {family:'JetBrains Mono'} } }
+};
+
+function initCharts() {
+  const signalCtx = document.getElementById('chartSignals').getContext('2d');
+  chartSignals = new Chart(signalCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Breakout', 'Pullback', 'Neutral'],
+      datasets: [{
+        data: [0,0,0],
+        backgroundColor: ['rgba(0,229,180,.7)','rgba(245,158,11,.7)','rgba(90,113,144,.5)'],
+        borderColor: ['#00e5b4','#f59e0b','#5a7190'],
+        borderWidth: 1,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      cutout: '70%',
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        legend: { display: true, position: 'bottom', labels: { color: '#5a7190', font:{size:10, family:'Space Grotesk'}, boxWidth: 10 } }
+      }
+    }
+  });
+
+  const sectorCtx = document.getElementById('chartSectors').getContext('2d');
+  chartSectors = new Chart(sectorCtx, {
+    type: 'bar',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: 'rgba(56,189,248,.5)', borderColor: '#38bdf8', borderWidth: 1 }] },
+    options: {
+      ...CHART_DEFAULTS,
+      indexAxis: 'y',
+      scales: {
+        x: { grid: {color: 'rgba(28,43,66,.8)'}, ticks: {color:'#5a7190', font:{size:10, family:'JetBrains Mono'}} },
+        y: { grid: {display:false}, ticks: {color:'#5a7190', font:{size:10, family:'Space Grotesk'}} }
+      }
+    }
+  });
+
+  const scoreCtx = document.getElementById('chartScores').getContext('2d');
+  chartScores = new Chart(scoreCtx, {
+    type: 'bar',
+    data: {
+      labels: ['90-100','80-89','70-79','60-69','<60'],
+      datasets: [{
+        data: [0,0,0,0,0],
+        backgroundColor: ['rgba(0,229,180,.8)','rgba(0,229,180,.6)','rgba(56,189,248,.6)','rgba(245,158,11,.6)','rgba(90,113,144,.5)'],
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      scales: {
+        x: { grid: {display:false}, ticks: {color:'#5a7190', font:{size:10, family:'JetBrains Mono'}} },
+        y: { grid: {color: 'rgba(28,43,66,.8)'}, ticks: {color:'#5a7190', font:{size:10, family:'JetBrains Mono'}} }
+      }
+    }
+  });
+}
+
+function updateCharts(d) {
+  if (!d) return;
+
+  // Signals
+  if (chartSignals && d.signals) {
+    chartSignals.data.datasets[0].data = [
+      d.signals.BREAKOUT || 0, d.signals.PULLBACK || 0, d.signals.NEUTRAL || 0
+    ];
+    chartSignals.update();
+  }
+
+  // Sectors
+  if (chartSectors && d.sectors) {
+    const entries = Object.entries(d.sectors).slice(0,8);
+    chartSectors.data.labels = entries.map(e => e[0].slice(0,18));
+    chartSectors.data.datasets[0].data = entries.map(e => e[1]);
+    chartSectors.update();
+  }
+
+  // Score dist
+  if (chartScores && d.score_distribution) {
+    const sd = d.score_distribution;
+    chartScores.data.datasets[0].data = [
+      sd['90-100']||0, sd['80-89']||0, sd['70-79']||0, sd['60-69']||0, sd['<60']||0
+    ];
+    chartScores.update();
+  }
+}
+
+// ── Telegram ───────────────────────────────────────────────────────────────
+async function testTelegram() {
+  const btn = document.getElementById('btnTelegram');
+  btn.textContent = '⏳ Enviando...';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/telegram/test', {method:'POST'});
+    const d = await res.json();
+    if (res.ok) showToast('✓ Mensaje enviado a Telegram', 'ok');
+    else showToast('✗ ' + (d.error || 'Error Telegram'), 'err');
+  } catch(e) { showToast('Error de conexión', 'err'); }
+  finally { btn.textContent = '🤖 Test Telegram'; btn.disabled = false; }
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast-${type} show`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+initCharts();
+loadResults().then(() => loadStats());
+
+// Refresh every 60s if not scanning
+setInterval(() => { if (!scanning) { loadResults(); loadStats(); } }, 60000);
+</script>
+</body>
+</html>

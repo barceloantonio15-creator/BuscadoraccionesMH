@@ -1,0 +1,11 @@
+# Railway usa Nixpacks para construir el proyecto.
+# Este archivo fuerza Python 3.11 y optimiza el build.
+
+[phases.setup]
+nixPkgs = ["python311", "python311Packages.pip"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "gunicorn app:app --workers 1 --threads 4 --bind 0.0.0.0:$PORT --timeout 120"

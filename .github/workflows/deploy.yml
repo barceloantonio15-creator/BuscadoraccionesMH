@@ -1,0 +1,97 @@
+name: GROW Dashboard — CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── 1. Tests y validación de sintaxis ─────────────────────────────────────
+  lint:
+    name: Lint & Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Verificar sintaxis Python
+        run: |
+          python -m py_compile app.py
+          python -m py_compile scanner.py
+          python -m py_compile telegram_notifier.py
+          echo "✅ Sintaxis correcta"
+
+      - name: Verificar imports
+        run: |
+          python -c "
+          import app, scanner, telegram_notifier
+          print('✅ Todos los módulos importan correctamente')
+          "
+        env:
+          TELEGRAM_BOT_TOKEN: ""
+          TELEGRAM_CHAT_ID: ""
+
+  # ── 2. Notificación Telegram al hacer deploy ───────────────────────────────
+  notify-deploy:
+    name: Notify Telegram on Deploy
+    runs-on: ubuntu-latest
+    needs: lint
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enviar notificación a Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          COMMIT_SHA=$(git log -1 --pretty=%h)
+          AUTHOR=$(git log -1 --pretty=%an)
+          REPO=${{ github.repository }}
+
+          MESSAGE="🚀 <b>GROW Dashboard — Nuevo Deploy</b>
+          ━━━━━━━━━━━━━━━━━━━━
+          📦 Repo: <code>${REPO}</code>
+          👤 Autor: ${AUTHOR}
+          🔖 Commit: <code>${COMMIT_SHA}</code>
+          📝 ${COMMIT_MSG}
+          ━━━━━━━━━━━━━━━━━━━━
+          ✅ Tests OK · Deploy en Railway en curso..."
+
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"chat_id\": \"${TELEGRAM_CHAT_ID}\",
+              \"text\": \"${MESSAGE}\",
+              \"parse_mode\": \"HTML\"
+            }"
+
+  # ── 3. Scan programado via GitHub Actions (alternativa a Railway scheduler) ─
+  # Descomenta este job si prefieres que el scan lo dispare GitHub Actions
+  # en lugar del scheduler interno de la app.
+  #
+  # scheduled-scan:
+  #   name: Scheduled Market Scan
+  #   runs-on: ubuntu-latest
+  #   # Cron en UTC: 13:35 = 9:35 ET (sin horario de verano), 19:55 = 15:55 ET
+  #   if: github.event_name == 'schedule'
+  #   steps:
+  #     - name: Trigger scan via API
+  #       env:
+  #         APP_URL: ${{ secrets.RAILWAY_APP_URL }}
+  #         SCAN_API_KEY: ${{ secrets.SCAN_API_KEY }}
+  #       run: |
+  #         curl -s -X POST "${APP_URL}/api/scan/start" \
+  #           -H "Content-Type: application/json" \
+  #           -H "X-API-Key: ${SCAN_API_KEY}" \
+  #           -d '{"max_stocks": 100}'
